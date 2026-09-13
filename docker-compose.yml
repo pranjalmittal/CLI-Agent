@@ -1,0 +1,15 @@
+services:
+  wincliagent:
+    build: .
+    image: wincliagent:latest
+    container_name: wincliagent
+    env_file:
+      - .env
+    # Mount the project so edits on your Mac show up live in the container.
+    volumes:
+      - .:/app
+    working_dir: /app
+    # Keep the container alive so you can exec into it.
+    stdin_open: true
+    tty: true
+    command: bash
