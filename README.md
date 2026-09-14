@@ -1,6 +1,6 @@
-# WinCliAgent (Java Edition)
+# WinCliAgent
 
-An agent written in **pure Java** (JDK 17+) with **zero external dependencies** that takes a natural-language prompt, converts it into a **Windows CLI command** using the OpenAI API, screens it for safety, executes it, and shows the output.
+An agent written in **Java** (JDK 17+) that takes a natural-language prompt, converts it into a **Windows CLI command** using the OpenAI API, screens it for safety, executes it, and shows the output.
 
 ## How it works
 
