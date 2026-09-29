@@ -10,7 +10,7 @@ prompt --> [generate] --> [safety] --> (execute | blocked) --> output
 ```
 
 - **generate** (`agent.llm.OpenAiClient`) — GPT translates your request into a single Windows command (`dir`, `type`, `ipconfig`, `Get-ChildItem`, ...). The system prompt forbids Unix-only commands.
-- **safety** (`agent.safety.SafetyFilter`) — a pre-compiled regex screen blocks obviously destructive commands (`format`, `shutdown`, mass delete, `diskpart`, execution policy bypass, etc.).
+- **safety** (`agent.safety.SafetyFilter` + `agent.safety.CommandNormalizer`) — a pre-compiled regex screen blocks obviously destructive commands (`format`, `shutdown`, mass delete, `diskpart`, execution policy bypass, etc.). Before screening, the command is de-obfuscated and decomposed so nested and hidden payloads are caught (see Safety below).
 - **execute** (`agent.executor.CommandExecutor`) — the command runs via native Windows shells or cross-platform PowerShell Core (`pwsh`), capturing stdout, stderr, and exit codes with configurable timeout.
 
 ## Architecture
@@ -27,6 +27,7 @@ prompt --> [generate] --> [safety] --> (execute | blocked) --> output
       model/ExecutionResult.java     # Execution record (stdout, stderr, exitCode)
       pipeline/AgentPipeline.java    # Workflow coordinator (generate -> safety -> execute)
       safety/SafetyFilter.java       # Destructive command screening
+      safety/CommandNormalizer.java  # Decodes and decomposes commands before screening
       Main.java                      # CLI entry point (REPL & one-shot)
     test/java/agent/
       AgentTest.java                 # Standalone unit test suite
@@ -37,6 +38,31 @@ prompt --> [generate] --> [safety] --> (execute | blocked) --> output
   docker-compose.yml
   .env.example                       # API key configuration template
   ```
+
+## Safety
+
+The safety screen fails closed. `CommandNormalizer` expands a command line into every form
+that must be checked, and `SafetyFilter` screens each one:
+
+| Evasion | Handled by |
+| --- | --- |
+| `pwsh -EncodedCommand <base64>` | Base64 payload decoded (UTF-16LE and UTF-8) and screened; undecodable payloads are blocked as opaque |
+| `cmd /c format C:` | Nested shell wrappers unwrapped and screened |
+| `& { format }` | Script blocks and call operators unwrapped |
+| `` fo`rmat `` | Backtick escapes stripped |
+| `"fo"+"rmat"` | Literal concatenation folded into the resolved command name |
+| `Get-ChildItem \| Remove-Item -Recurse` | Quote-aware split on `;`, `&&`, `\|\|`, `\|`; every segment screened |
+
+Blocked commands are never executed and there is no override flag. Variable-driven invocation
+(`& $cmd`) cannot be resolved statically and is screened on its literal text only, so the
+screen remains a guardrail rather than a sandbox.
+
+Known conservative behavior: a destructive keyword appearing inside a quoted argument
+(`echo "the shutdown was cancelled"`) is still blocked.
+
+Execution is bounded: output is capped at 1 MiB per stream (excess is counted and discarded
+while the stream is still drained), timeouts escalate from a graceful terminate to a forced
+kill of the whole process tree, and partial output from a timed-out command is preserved.
 
 ## Configuration
 
