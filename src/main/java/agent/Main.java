@@ -72,6 +72,8 @@ public class Main {
 
         if (!state.isSafe()) {
             System.out.println("  [BLOCKED] " + state.getSafetyReason());
+            System.out.println("\nThis command was not executed. The safety screen has no override.\n");
+            return 1;
         }
 
         if (!auto) {
